@@ -18,6 +18,10 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# EAS credentials — never committed; use `eas secret:create` instead
+google-service-account*.json
+AuthKey_*.p8
+
 # Metro
 .metro-health-check*
 
