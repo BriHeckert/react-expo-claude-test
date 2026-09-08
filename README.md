@@ -1,56 +1,86 @@
-# Welcome to your Expo app 👋
+# react-expo-claude-test
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+An [Expo](https://expo.dev) app, Expo Router-based, on SDK 57.
 
 ## Get started
 
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
 ```bash
-npm run reset-project
+npm install
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+From the CLI output you can open the app in a [development
+build](https://docs.expo.dev/develop/development-builds/introduction/), an
+[Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/),
+an [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/), or [Expo
+Go](https://expo.dev/go).
 
-### Other setup steps
+## Project structure
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+- `src/app/` — [file-based routes](https://docs.expo.dev/router/introduction).
+  Routes stay thin: `src/app/index.tsx` just renders a feature component, it
+  doesn't hold logic itself. **Nothing else belongs in this directory** —
+  Expo Router bundles every file under it via `require.context`, including
+  test files, so a colocated `*.test.tsx` here would ship test-only code into
+  the production bundle.
+- `src/screens/` — the actual screen components (and their tests), rendered
+  by a thin route.
+- `src/utils/TestUtils.tsx` — the provider-wrapping custom `render`/`screen`
+  for component tests. Import `render`/`screen` from here, not directly from
+  `@testing-library/react-native`, so tests stay wired to whatever global
+  providers the app grows over time.
 
-## Learn more
+## Quality gate
 
-To learn more about developing your project with Expo, look at the following resources:
+```bash
+npm run lint        # eslint-config-expo/flat
+npm run format       # prettier --check
+npm run format:write  # prettier --write
+npm run typecheck    # tsc --noEmit
+npm test             # jest
+npx expo-doctor       # SDK/dependency sanity check
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+All of the above run in CI on every pull request — see
+[`.github/workflows/pr-checks.yml`](.github/workflows/pr-checks.yml). It also
+runs `npx expo export` for both `ios` and `android` — a JS bundle export (not
+a native compile) that exercises Metro bundling and config-plugin resolution
+for each platform — no external credentials needed for any of this.
 
-## Join the community
+Run the exact same sequence locally before opening a PR:
 
-Join our community of developers creating universal apps.
+```bash
+npm run check
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+**What this CI doesn't catch**: a native compile error, or a real
+App Store/Play Store build. `expo export` and `expo-doctor` narrow that gap
+but don't close it — see the EAS section below for where real builds happen.
+
+## Native builds and store releases (EAS)
+
+`eas.json` and `.eas/workflows/` are scaffolded as **reference, not yet
+active** — they need an EAS account, Apple/Google credentials, and a few
+placeholder values filled in before anything will run. See
+[`.eas/workflows/README.md`](.eas/workflows/README.md) for the full setup
+checklist. Once wired up:
+
+- `nightly-beta.yml` builds both platforms from `main` nightly and ships to
+  internal testers only (TestFlight internal group / Play internal track) —
+  no human review step at that tier on either store.
+- `promote-to-external.yml` is manually triggered to resubmit an
+  already-built artifact to wider testing, without rebuilding.
+
+## Agent tooling (Claude Code)
+
+This repo runs on the [Chassis](https://github.com/willowtreeapps/chassis)
+Claude Code plugin — roles, skills (`/plan`, `/dispatch`, `/review`,
+`/deliver`, `/checkup`, `/onboard`, ...), and doctrine for how agents should
+work in this repo. `chassis:checkup` reports on install/project health;
+`chassis:dispatch` routes implementation work to the right role. Chassis's
+own persistent memory (`~/.chassis`) lives outside this repo — it's shared
+across every project you use it on, not specific to this one.
+
+The official `expo` Claude Code plugin is also enabled, providing Expo/EAS
+domain skills (e.g. `eas-app-stores`, `eas-workflows`) consulted when working
+on native-build or store-release tasks.

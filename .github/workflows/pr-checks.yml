@@ -36,3 +36,6 @@ jobs:
 
       - name: 🍎 iOS bundle export
         run: npx expo export -p ios
+
+      - name: 🤖 Android bundle export
+        run: npx expo export -p android
