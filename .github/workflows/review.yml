@@ -1,0 +1,73 @@
+name: review
+
+# The chassis review gate, adopted in this repo as the gate's ~15-line CONSUMER BLOCK.
+# The review engine does not live here: it lives in the reusable workflow
+# chassis-review.yml (on: workflow_call) in willowtreeapps/chassis, and this workflow is a
+# THIN CALLER of it. Copied from chassis's own self-adoption caller
+# (.github/workflows/review-gate.yml), which is the same block in production on chassis
+# itself.
+# Provenance of the template: chassis docs/plans/2026-07-20-chassis-review-reusable-workflow.html (U9).
+#
+# BRANCH-PROTECTION CONTEXT: the required status check is `review / verdict` — the caller
+# job `review` (below) concatenated with the callee's gate job name `verdict`. The UI
+# renders it `review / review / verdict`, prefixed by this workflow's `name:`; the
+# FILENAME participates in no contract string. This workflow's `name:` is `review` rather
+# than the template's `chassis` purely so it reads clearly in this repo's Actions UI
+# alongside `PR Checks` — the `name:` does not appear in the contract string, so that
+# rename changes nothing branch protection pins.
+#
+# TRUSTED-MAIN REF (R7 principle, preserved): the `uses:` below pins the FULL ref
+# `willowtreeapps/chassis/.github/workflows/chassis-review.yml@main`, never a relative
+# `./.github/workflows/...` form. A relative callee resolves at the PR's merge ref, which
+# would let a PR modify the very gate wiring that reviews it. The full @main ref keeps the
+# gate anchored to trusted chassis main: a wiring change activates only AFTER it merges —
+# the same engine-freshness-lag acceptance R7 already made (the in-flight PR is reviewed by
+# the currently-merged gate, never by its own proposed edits).
+#
+# CALLER-ANCHORED PERMISSIONS: a reusable callee cannot self-elevate — the effective token
+# scope is the INTERSECTION of caller and callee grants, and since #726's rework the callee
+# declares NO workflow-level permissions at all (a callee block asking for a scope the caller
+# withholds is a startup_failure: zero jobs, zero check runs, a required context that never
+# reports). Its `plan` and `lane` jobs declare their own scopes; its `verdict` job
+# declares none and INHERITS whatever is granted here. So the grants live HERE:
+#   contents: read       — read the PR
+#   pull-requests: write — the sticky review comment
+#   checks: read         — OPTIONAL for a consumer, adopted here: the verdict job's supersede
+#                          check (#726) reads the head SHA's check runs to find the twin that
+#                          superseded a cancelled run. Omitting it keeps the pre-#726
+#                          behavior — the query 403s, the run fails closed, the merge is held
+#                          (never a false green), and a rapid re-push then needs a manual
+#                          re-run to clear. This repo grants it so those supersedes mirror
+#                          instead, which is the reason any consumer wants it; nothing about
+#                          it is chassis-specific.
+# `checks: read` is deliberately narrower than the `actions: read` that would also have served:
+# it exposes checks on commits, not this repo's whole workflow-run history.
+#
+# NO INPUTS: we pass no `with:` block. The callee's input defaults are the chassis gate as
+# tuned (review-model, max-turns, gitleaks-version, disposition-label, coverage-artifact),
+# and this consumer takes them unchanged.
+#
+# NO CONCURRENCY HERE: the callee (chassis-review.yml) declares the groups that supersede an
+# in-flight review, and it declares them PER JOB — `review-gate-<pr>-plan` on `plan` and
+# `review-gate-<pr>-lane-<label>` on each lane, both cancel-in-progress, with `verdict`
+# deliberately in no group at all so a superseded run's verdict job cannot hold the slot its
+# own replacement needs. A caller-level group would cover every job including `verdict` and
+# reintroduce exactly that deadlock, so concurrency is deliberately left OUT of the caller.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  review:
+    permissions:
+      contents: read # read the PR under review
+      # No id-token: write — the engine passes an explicit github_token; dropped engine-side
+      # in #837, caller-side in #855.
+      pull-requests: write # the sticky review comment
+      # OPTIONAL for consumers; adopted here — the verdict job's supersede check reads the
+      # twin's check run (#726). See the header.
+      checks: read
+    uses: willowtreeapps/chassis/.github/workflows/chassis-review.yml@main
+    secrets:
+      anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
