@@ -1,0 +1,58 @@
+# Reference scaffold — not yet runnable. See .eas/workflows/README.md for the
+# one-time account/credential setup this depends on before EAS will pick it up.
+#
+# Builds both platforms nightly from `main` and ships straight to each store's
+# internal testing tier (TestFlight internal group / Play internal track) with
+# no human review step. Promoting a specific build to external testers is a
+# separate, manually-triggered workflow — see promote-to-external.yml.
+
+name: Nightly Beta
+
+on:
+  schedule:
+    # 7am GMT daily. Scheduled workflows only run against the default branch,
+    # and cron is evaluated in GMT — convert to your team's local morning.
+    - cron: '0 7 * * *'
+
+jobs:
+  build-ios:
+    type: build
+    params:
+      platform: ios
+      profile: preview
+
+  build-android:
+    type: build
+    params:
+      platform: android
+      profile: preview
+
+  submit-ios:
+    type: submit
+    needs: [build-ios]
+    params:
+      platform: ios
+      build_id: ${{ needs.build-ios.outputs.build_id }}
+      profile: preview
+      # Internal TestFlight group name(s) — replace with your team's actual
+      # group as configured in App Store Connect. Internal-only: no Apple
+      # review step.
+      groups: ['REPLACE_WITH_INTERNAL_TESTFLIGHT_GROUP']
+
+  submit-android:
+    type: submit
+    needs: [build-android]
+    params:
+      platform: android
+      build_id: ${{ needs.build-android.outputs.build_id }}
+      profile: preview
+      # track: internal is already set in eas.json's submit.preview.android;
+      # Play's internal track has no review step at any tier.
+
+  notify-failure:
+    type: slack
+    needs: [build-ios, build-android, submit-ios, submit-android]
+    if: ${{ needs.build-ios.status == 'failure' || needs.build-android.status == 'failure' || needs.submit-ios.status == 'failure' || needs.submit-android.status == 'failure' }}
+    params:
+      webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+      message: 'Nightly Beta workflow failed — check the EAS dashboard for details.'

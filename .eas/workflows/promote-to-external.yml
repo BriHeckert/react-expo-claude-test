@@ -1,0 +1,46 @@
+# Reference scaffold — not yet runnable. See .eas/workflows/README.md.
+#
+# Manually promotes an ALREADY-BUILT artifact from nightly-beta.yml to wider
+# testing, without rebuilding. Run via the EAS dashboard or `eas workflow:run`,
+# passing the build id(s) from `eas build:list` for whichever nightly run you
+# want to promote. Leave a platform's input blank to skip that platform.
+#
+# iOS: promoting to a new external TestFlight group triggers Apple's one-time
+# Beta App Review (~24h) for that group's first build; later builds to the
+# same group are instant. Not fully verified against live EAS docs — confirm
+# with `eas submit --help` when you're actually wiring this up.
+#
+# Android: no review gate at any track, so beta really is instant here.
+
+name: Promote to External Beta
+
+on:
+  workflow_dispatch:
+    inputs:
+      ios_build_id:
+        required: false
+        description: 'Build ID to promote to iOS external TestFlight (eas build:list)'
+      android_build_id:
+        required: false
+        description: 'Build ID to promote to the Android beta track (eas build:list)'
+
+jobs:
+  submit-ios-external:
+    type: submit
+    if: ${{ inputs.ios_build_id != '' }}
+    params:
+      platform: ios
+      build_id: ${{ inputs.ios_build_id }}
+      profile: preview
+      groups: ['REPLACE_WITH_EXTERNAL_TESTFLIGHT_GROUP']
+
+  submit-android-beta:
+    type: submit
+    if: ${{ inputs.android_build_id != '' }}
+    params:
+      platform: android
+      build_id: ${{ inputs.android_build_id }}
+      profile: preview
+      # Overrides eas.json's submit.preview.android.track (internal) for this
+      # one-off promotion.
+      track: beta
